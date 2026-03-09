@@ -8,10 +8,19 @@ import Grade from './pages/Grade'
 import Locations from './pages/Locations'
 import Reports from './pages/Reports'
 import Kiosk from './pages/Kiosk'
+import StoreView from './pages/StoreView'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'store') return <Navigate to="/store" replace />
+  return <>{children}</>
+}
+
+function StoreRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'store') return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -21,11 +30,8 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/kiosk/:storeId" element={<Kiosk />} />
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }>
+        <Route path="/store" element={<StoreRoute><StoreView /></StoreRoute>} />
+        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<CutTableDashboard />} />
           <Route path="audits" element={<AuditDashboard />} />
           <Route path="grade" element={<Grade />} />
