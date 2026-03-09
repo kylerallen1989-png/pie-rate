@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TrendingUp, TrendingDown, AlertTriangle, User } from 'lucide-react'
+import { AlertTriangle, User } from 'lucide-react'
 
 const AUDITS = [
   { id: '1', store: '3407', employee: 'Carlos M.', style: 'Original Crust', score: 9, crust: 2, cheeseCov: 2, cheeseLock: 2, toppings: 3, passed: true, manager: 'John Manager', time: '2 hr ago', checksFailed: [] },
@@ -15,7 +15,7 @@ export default function AuditDashboard() {
   const filtered = filter === 'all' ? AUDITS : filter === 'passed' ? AUDITS.filter(a => a.passed) : AUDITS.filter(a => !a.passed)
   const passCount = AUDITS.filter(a => a.passed).length
   const failCount = AUDITS.filter(a => !a.passed).length
-  const passRate = Math.round((passCount / AUDITS.length) * 100)
+  // passRate calculated but shown in future UI
 
   return (
     <div className="p-4 space-y-4">

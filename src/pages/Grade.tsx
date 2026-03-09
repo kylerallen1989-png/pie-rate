@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Camera, CheckCircle, AlertTriangle, ChevronRight } from 'lucide-react'
+import { Camera, CheckCircle, AlertTriangle } from 'lucide-react'
 
 const STORES = ['957','1183','1963','3175','3309','3407','3999','4037','4106','4109','4870','4929','5070','5143']
 const STYLES = ['Original Crust','Thin Crust','Pan Pizza','Stuffed Crust','Gluten Free','NY Style']
@@ -17,7 +17,7 @@ const MANUAL_CHECKS = [
 ]
 
 export default function Grade() {
-  const { user } = useAuth()
+  useAuth()
   const [step, setStep] = useState(1)
   const [store, setStore] = useState('')
   const [employee, setEmployee] = useState('')

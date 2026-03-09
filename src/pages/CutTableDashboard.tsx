@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 
 const STORES = [
   { id: '957',  passRate: 94, wtdRate: 92, todayGrades: 50, failed: 3,  trend: 'up' },
