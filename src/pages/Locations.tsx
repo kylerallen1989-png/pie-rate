@@ -31,7 +31,7 @@ export default function Locations() {
     return matchSearch && matchRegion
   })
 
-  const selectedStore = STORES.find(s => s.id === selected)
+  // selectedStore used inline via selected state
 
   return (
     <div className="p-4 space-y-4">

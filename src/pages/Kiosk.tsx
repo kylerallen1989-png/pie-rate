@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 
 export default function Kiosk() {
   const { storeId } = useParams()
-  const [lastScore, setLastScore] = useState<number | null>(88)
+  const [lastScore, _setLastScore] = useState<number | null>(88)
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {

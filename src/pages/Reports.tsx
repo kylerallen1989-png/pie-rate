@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, TrendingUp, TrendingDown } from 'lucide-react'
+import { Download } from 'lucide-react'
 
 const STORE_WEEKLY = [
   { id: '957',  mon:95,tue:93,wed:94,thu:96,fri:95,sat:92,sun:93,wtd:94.0 },
@@ -42,7 +42,7 @@ function Cell({ score }: { score: number }) {
 
 export default function Reports() {
   const [period, setPeriod] = useState('wtd')
-  const [store, setStore] = useState('all')
+  // store filter coming soon
   const sorted = [...STORE_WEEKLY].sort((a, b) => b.wtd - a.wtd)
   const avgWtd = Math.round(STORE_WEEKLY.reduce((s, x) => s + x.wtd, 0) / STORE_WEEKLY.length)
   const passing = STORE_WEEKLY.filter(s => s.wtd >= 80).length

@@ -1,31 +1,22 @@
 const fs = require('fs')
 
-// Fix AuthContext.tsx
-let auth = fs.readFileSync('src/context/AuthContext.tsx', 'utf8')
-auth = auth.replace("import { createContext, useContext, useState, ReactNode }", "import { createContext, useContext, useState } from 'react'\nimport type { ReactNode }")
-auth = auth.replace("import { createContext, useContext, useState, ReactNode } from 'react'", "import { createContext, useContext, useState } from 'react'\nimport type { ReactNode } from 'react'")
-fs.writeFileSync('src/context/AuthContext.tsx', auth)
-console.log('fixed AuthContext')
+// Fix Kiosk.tsx
+let kiosk = fs.readFileSync('src/pages/Kiosk.tsx', 'utf8')
+kiosk = kiosk.replace('const [lastScore, setLastScore]', 'const [lastScore, _setLastScore]')
+fs.writeFileSync('src/pages/Kiosk.tsx', kiosk)
+console.log('fixed Kiosk')
 
-// Fix AuditDashboard.tsx
-let audit = fs.readFileSync('src/pages/AuditDashboard.tsx', 'utf8')
-audit = audit.replace("import { useState } from 'react'\nimport { TrendingUp, TrendingDown, AlertTriangle, User } from 'lucide-react'", "import { useState } from 'react'\nimport { AlertTriangle, User } from 'lucide-react'")
-audit = audit.replace("  const passRate = Math.round((passCount / AUDITS.length) * 100)", "  // passRate calculated but shown in future UI")
-fs.writeFileSync('src/pages/AuditDashboard.tsx', audit)
-console.log('fixed AuditDashboard')
+// Fix Locations.tsx
+let loc = fs.readFileSync('src/pages/Locations.tsx', 'utf8')
+loc = loc.replace('  const selectedStore = STORES.find(s => s.id === selected)', '  // selectedStore used inline via selected state')
+fs.writeFileSync('src/pages/Locations.tsx', loc)
+console.log('fixed Locations')
 
-// Fix CutTableDashboard.tsx
-let cut = fs.readFileSync('src/pages/CutTableDashboard.tsx', 'utf8')
-cut = cut.replace("import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'", "import { AlertTriangle } from 'lucide-react'")
-fs.writeFileSync('src/pages/CutTableDashboard.tsx', cut)
-console.log('fixed CutTableDashboard')
-
-// Fix Grade.tsx
-let grade = fs.readFileSync('src/pages/Grade.tsx', 'utf8')
-grade = grade.replace("import { Camera, CheckCircle, AlertTriangle, ChevronRight } from 'lucide-react'", "import { Camera, CheckCircle, AlertTriangle } from 'lucide-react'")
-grade = grade.replace("  const { user } = useAuth()\n", "  useAuth()\n")
-grade = grade.replace("  const { user } = useAuth()", "  useAuth()")
-fs.writeFileSync('src/pages/Grade.tsx', grade)
-console.log('fixed Grade')
+// Fix Reports.tsx
+let rep = fs.readFileSync('src/pages/Reports.tsx', 'utf8')
+rep = rep.replace("import { Download, TrendingUp, TrendingDown } from 'lucide-react'", "import { Download } from 'lucide-react'")
+rep = rep.replace("  const [store, setStore] = useState('all')", "  // store filter coming soon")
+fs.writeFileSync('src/pages/Reports.tsx', rep)
+console.log('fixed Reports')
 
 console.log('All fixes applied!')
