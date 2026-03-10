@@ -6,6 +6,7 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [mode, setMode] = useState<'manager' | 'store'>('manager')
+  const switchMode = (m: 'manager' | 'store') => { setMode(m); setEmail(''); setStoreId(''); setPassword(''); setError('') }
   const [email, setEmail] = useState('')
   const [storeId, setStoreId] = useState('')
   const [password, setPassword] = useState('')
@@ -36,10 +37,10 @@ export default function Login() {
           <p className="text-gray-500 mt-1 text-sm">Pizza Quality Platform</p>
         </div>
         <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
-          <button onClick={() => setMode('manager')} className={'flex-1 py-2 rounded-lg text-sm font-medium transition ' + (mode === 'manager' ? 'bg-white shadow text-gray-900' : 'text-gray-500')}>
+          <button onClick={() => switchMode('manager')} className={'flex-1 py-2 rounded-lg text-sm font-medium transition ' + (mode === 'manager' ? 'bg-white shadow text-gray-900' : 'text-gray-500')}>
             Manager Login
           </button>
-          <button onClick={() => setMode('store')} className={'flex-1 py-2 rounded-lg text-sm font-medium transition ' + (mode === 'store' ? 'bg-white shadow text-gray-900' : 'text-gray-500')}>
+          <button onClick={() => switchMode('store')} className={'flex-1 py-2 rounded-lg text-sm font-medium transition ' + (mode === 'store' ? 'bg-white shadow text-gray-900' : 'text-gray-500')}>
             Store Login
           </button>
         </div>
