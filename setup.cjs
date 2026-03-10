@@ -1,16 +1,7 @@
 const fs = require('fs')
-let login = fs.readFileSync('src/pages/Login.tsx', 'utf8')
-login = login.replace(
-  "  const [mode, setMode] = useState<'manager' | 'store'>('manager')",
-  "  const [mode, setMode] = useState<'manager' | 'store'>('manager')\n  const switchMode = (m: 'manager' | 'store') => { setMode(m); setEmail(''); setStoreId(''); setPassword(''); setError('') }"
-)
-login = login.replace(
-  "onClick={() => setMode('manager')}",
-  "onClick={() => switchMode('manager')}"
-)
-login = login.replace(
-  "onClick={() => setMode('store')}",
-  "onClick={() => switchMode('store')}"
-)
-fs.writeFileSync('src/pages/Login.tsx', login)
-console.log('fixed Login.tsx')
+let app = fs.readFileSync('src/App.tsx', 'utf8')
+app = app.replace("import SupabaseTest from './pages/SupabaseTest'\n", "")
+app = app.replace("\n        <Route path=\"/test\" element={<SupabaseTest />} />", "")
+fs.writeFileSync('src/App.tsx', app)
+fs.unlinkSync('src/pages/SupabaseTest.tsx')
+console.log('done')
