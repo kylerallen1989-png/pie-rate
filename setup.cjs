@@ -1,7 +1,5 @@
 const fs = require('fs')
 let app = fs.readFileSync('src/App.tsx', 'utf8')
-app = app.replace("import SupabaseTest from './pages/SupabaseTest'\n", "")
 app = app.replace("\n        <Route path=\"/test\" element={<SupabaseTest />} />", "")
 fs.writeFileSync('src/App.tsx', app)
-fs.unlinkSync('src/pages/SupabaseTest.tsx')
 console.log('done')

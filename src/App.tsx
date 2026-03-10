@@ -30,7 +30,6 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/kiosk/:storeId" element={<Kiosk />} />
-        <Route path="/test" element={<SupabaseTest />} />
         <Route path="/store" element={<StoreRoute><StoreView /></StoreRoute>} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<CutTableDashboard />} />
