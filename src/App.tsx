@@ -11,14 +11,16 @@ import Kiosk from './pages/Kiosk'
 import StoreView from './pages/StoreView'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Loading...</div></div>
   if (!user) return <Navigate to="/login" replace />
   if (user.role === 'store') return <Navigate to="/store" replace />
   return <>{children}</>
 }
 
 function StoreRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Loading...</div></div>
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== 'store') return <Navigate to="/" replace />
   return <>{children}</>
