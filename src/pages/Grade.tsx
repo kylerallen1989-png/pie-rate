@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Camera, CheckCircle, AlertTriangle } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
 const STORES = ['957','1183','1963','3175','3309','3407','3999','4037','4106','4109','4870','4929','5070','5143']
 const STYLES = ['Original Crust','Thin Crust','Pan Pizza','Stuffed Crust','Gluten Free','NY Style']
@@ -17,7 +18,7 @@ const MANUAL_CHECKS = [
 ]
 
 export default function Grade() {
-  useAuth()
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const [store, setStore] = useState('')
   const [employee, setEmployee] = useState('')
@@ -26,6 +27,7 @@ export default function Grade() {
   const [checks, setChecks] = useState<Record<string,boolean>>({})
   const [notes, setNotes] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<any>(null)
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,14 +45,28 @@ export default function Grade() {
 
   const allChecksPassed = MANUAL_CHECKS.every(c => checks[c] === true)
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setSaving(true)
     const crust = 2
     const cheeseCov = 2
     const cheeseLock = 1
     const toppings = 3.5
     const total = crust + cheeseCov + cheeseLock + toppings
     const passed = total >= 8 && allChecksPassed
+
+    const { error } = await supabase.from('grades').insert({
+      store_id: store,
+      score: total,
+      passed,
+      mode: 'audit',
+      image_url: null,
+      graded_at: new Date().toISOString(),
+    })
+
+    if (error) console.error('Save error:', error.message)
+
     setResult({ crust, cheeseCov, cheeseLock, toppings, total, passed, allChecksPassed })
+    setSaving(false)
     setSubmitted(true)
   }
 
@@ -71,7 +87,6 @@ export default function Grade() {
           <div className={"text-5xl font-bold mb-6 " + (result.passed ? "text-green-600" : "text-red-600")}>
             {result.total}/10
           </div>
-
           <div className="grid grid-cols-2 gap-3 mb-4">
             {[
               { label: 'Crust', score: result.crust, max: 2 },
@@ -87,14 +102,12 @@ export default function Grade() {
               </div>
             ))}
           </div>
-
           {!result.allChecksPassed && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-left">
               <div className="text-red-700 text-sm font-semibold">Manual checks failed</div>
               <div className="text-red-600 text-xs mt-1">One or more required checks were not met. Pizza automatically fails.</div>
             </div>
           )}
-
           <button onClick={reset} className="w-full bg-[#CC0000] hover:bg-[#aa0000] text-white font-semibold py-3 rounded-xl transition">
             Grade Another Pizza
           </button>
@@ -109,7 +122,6 @@ export default function Grade() {
         <div className="h-1.5 bg-gray-100">
           <div className="h-1.5 bg-[#CC0000] transition-all" style={{ width: (step / 4 * 100) + "%" }} />
         </div>
-
         <div className="p-5">
           <div className="flex items-center justify-between mb-5">
             <h1 className="text-lg font-bold text-gray-900">Manager Audit</h1>
@@ -207,6 +219,7 @@ export default function Grade() {
                 <div className="flex justify-between"><span className="text-gray-500">Store</span><span className="font-semibold">#{store}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Employee</span><span className="font-semibold">{employee}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Style</span><span className="font-semibold">{style}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Graded by</span><span className="font-semibold">{user?.name || 'Manager'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Manual Checks</span>
                   <span className={"font-semibold " + (allChecksPassed ? "text-green-600" : "text-red-600")}>
                     {allChecksPassed ? "All Passed" : "Some Failed"}
@@ -221,7 +234,9 @@ export default function Grade() {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setStep(3)} className="flex-1 border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl">Back</button>
-                <button onClick={handleSubmit} className="flex-1 bg-[#CC0000] text-white font-semibold py-3 rounded-xl">Submit</button>
+                <button onClick={handleSubmit} disabled={saving} className="flex-1 bg-[#CC0000] text-white font-semibold py-3 rounded-xl disabled:opacity-50">
+                  {saving ? 'Saving...' : 'Submit'}
+                </button>
               </div>
             </div>
           )}
