@@ -35,11 +35,21 @@ async function uploadPhoto(base64: string, storeId: string): Promise<string | nu
 
 export async function gradeWithAI(base64Image: string, storeId: string, mode: 'audit' | 'cut_table'): Promise<AIGradeResult[]> {
   const imageUrl = await uploadPhoto(base64Image, storeId)
-  const prompt = `You are an expert Papa John's pizza quality grader. Analyze this image and grade every pizza you can clearly see that has been cut and is ready for boxing.
+  const prompt = `You are a strict Papa John's pizza quality grader.
 
-Only grade these pizza types: cheese only, pepperoni and cheese, sausage and cheese. Ignore all other items.
+CRITICAL REQUIREMENTS - reject anything that does not meet ALL of these:
+- The pizza must be WHOLE and COMPLETE - all 8 slices present
+- The photo must be taken from DIRECTLY ABOVE (top-down view)
+- The pizza must be freshly cut and ready for boxing
+- The entire pizza must be visible with no slices missing or eaten
+- Partial pizzas, eaten pizzas, side-angle photos = return empty array []
+- Close-up photos showing only part of a pizza = return empty array []
+- Any non-pizza items = ignore them
 
-For each pizza grade using this rubric:
+Only grade these pizza types: cheese only, pepperoni and cheese, sausage and cheese.
+If the pizza type cannot be clearly identified = return empty array []
+
+For each qualifying pizza grade using this rubric:
 
 CRUST (0 or 2 points) - award 2 only if ALL pass:
 - Color between 7-11 on scale (not too pale, not too dark)
@@ -55,11 +65,11 @@ CHEESE LOCK (0 or 2 points) - award 2 only if ALL pass:
 - 75% or more cheese lock coverage
 - No bubbles larger than 1 inch diameter
 
-TOPPINGS (0 to 4 points, 0.5 per slice, 8 slices):
-- Pepperoni 1-topping: 5 per slice
-- Sausage crumbled: 7 per slice
+TOPPINGS (0 to 4 points):
+- Pepperoni 1-topping: need 5 per slice minimum
+- Sausage crumbled: need 7 per slice minimum
 - Cheese only: automatically 4/4
-- Partial slices combined, 90%+ rounds up
+- Be strict - if topping counts are borderline, deduct points
 
 Return ONLY a JSON array, no other text:
 [
@@ -73,7 +83,7 @@ Return ONLY a JSON array, no other text:
   }
 ]
 
-If no gradeable pizzas are visible return an empty array: []`
+If no qualifying pizzas are visible return exactly: []`
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
