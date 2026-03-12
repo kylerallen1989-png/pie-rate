@@ -26,7 +26,6 @@ async function uploadPhoto(base64: string, storeId: string): Promise<string | nu
     const { error } = await supabase.storage.from('pizza-photos').upload(filename, bytes, { contentType: 'image/jpeg' })
     if (error) { console.error('Upload error:', error); return null }
     const { data } = supabase.storage.from('pizza-photos').getPublicUrl(filename)
-    console.log('Uploaded photo URL:', data.publicUrl)
     return data.publicUrl
   } catch (e) {
     console.error('Upload failed:', e)
@@ -36,21 +35,21 @@ async function uploadPhoto(base64: string, storeId: string): Promise<string | nu
 
 export async function gradeWithAI(base64Image: string, storeId: string, mode: 'audit' | 'cut_table'): Promise<AIGradeResult[]> {
   const imageUrl = await uploadPhoto(base64Image, storeId)
-  console.log('imageUrl before insert:', imageUrl)
 
   const prompt = `You are a strict Papa John's pizza quality grader.
 
-CRITICAL REQUIREMENTS - reject anything that does not meet ALL of these:
+CRITICAL REQUIREMENTS - reject any pizza that does not meet ALL of these:
 - The pizza must be WHOLE and COMPLETE - all 8 slices present
 - The photo must be taken from DIRECTLY ABOVE (top-down view)
 - The pizza must be freshly cut and ready for boxing
 - The entire pizza must be visible with no slices missing or eaten
-- Partial pizzas, eaten pizzas, side-angle photos = return empty array []
-- Close-up photos showing only part of a pizza = return empty array []
-- Any non-pizza items = ignore them
+- Partial pizzas, eaten pizzas, side-angle photos = skip that pizza
+- Close-up photos showing only part of a pizza = skip that pizza
 
 Only grade these pizza types: cheese only, pepperoni and cheese, sausage and cheese.
-If the pizza type cannot be clearly identified = return empty array []
+If the pizza type cannot be clearly identified = skip that pizza.
+
+If multiple pizzas are visible, grade EACH one separately as its own entry in the array.
 
 For each qualifying pizza grade using this rubric:
 
@@ -109,19 +108,16 @@ If no qualifying pizzas are visible return exactly: []`
   for (const pizza of pizzas) {
     const score = pizza.crust + pizza.cheeseCoverage + pizza.cheeseLock + pizza.toppings
     const passed = score >= 8
-    const insertData = {
+    const { error } = await supabase.from('grades').insert({
       store_id: storeId,
       score,
       passed,
       mode,
       image_url: imageUrl,
       graded_at: new Date().toISOString()
-    }
-    console.log('Inserting grade:', insertData)
-    const { error } = await supabase.from('grades').insert(insertData)
+    })
     if (error) console.error('Insert error:', error)
-    const result: AIGradeResult = { score, passed, crust: pizza.crust, cheeseCoverage: pizza.cheeseCoverage, cheeseLock: pizza.cheeseLock, toppings: pizza.toppings, pizzaType: pizza.pizzaType, notes: pizza.notes, imageUrl }
-    results.push(result)
+    results.push({ score, passed, crust: pizza.crust, cheeseCoverage: pizza.cheeseCoverage, cheeseLock: pizza.cheeseLock, toppings: pizza.toppings, pizzaType: pizza.pizzaType, notes: pizza.notes, imageUrl })
   }
   return results
 }
