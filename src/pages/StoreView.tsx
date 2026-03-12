@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+tsximport { useEffect, useState, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { LogOut, Camera, Loader } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { gradeWithAI } from '../lib/gradeWithAI'
 
 interface StoreStats {
   todayRate: number
@@ -18,6 +19,9 @@ export default function StoreView() {
   const [time, setTime] = useState(new Date())
   const [data, setData] = useState<StoreStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [grading, setGrading] = useState(false)
+  const [lastResult, setLastResult] = useState<{score: number, passed: boolean} | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const storeId = user?.storeId || ''
 
   useEffect(() => {
@@ -28,7 +32,7 @@ export default function StoreView() {
   useEffect(() => {
     if (storeId) {
       fetchData()
-      const interval = setInterval(fetchData, 30000)
+      const interval = setInterval(fetchData, 15000)
       return () => clearInterval(interval)
     }
   }, [storeId])
@@ -65,7 +69,31 @@ export default function StoreView() {
     setLoading(false)
   }
 
+  const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setGrading(true)
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = reader.result as string
+      try {
+        const results = await gradeWithAI(base64, storeId, 'cut_table')
+        if (results.length > 0) {
+          setLastResult({ score: results[0].score, passed: results[0].passed })
+          await fetchData()
+        }
+      } catch (e) {
+        console.error('Grading error:', e)
+      }
+      setGrading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleLogout = () => { logout(); navigate('/login') }
+
+  const display = lastResult || (data && data.todayGrades > 0 ? { score: data.lastScore, passed: data.lastPassed } : null)
 
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -92,47 +120,49 @@ export default function StoreView() {
       </header>
 
       <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
-        {data && data.todayGrades > 0 ? (
-          <>
-            <div className={'w-56 h-56 rounded-full flex flex-col items-center justify-center border-8 ' + (data.lastPassed ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10')}>
-              <div className={'text-7xl font-bold ' + (data.lastPassed ? 'text-green-400' : 'text-red-400')}>{data.lastScore}</div>
-              <div className={'text-xl font-bold mt-1 ' + (data.lastPassed ? 'text-green-400' : 'text-red-400')}>{data.lastPassed ? '✓ PASS' : '✗ FAIL'}</div>
-              <div className="text-gray-500 text-xs mt-1">Last Pizza</div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
-              <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
-                <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">Today</div>
-                <div className={'text-4xl font-bold ' + (data.todayRate >= 80 ? 'text-green-400' : data.todayRate >= 70 ? 'text-yellow-400' : 'text-red-400')}>{data.todayRate}%</div>
-                <div className="text-gray-500 text-xs mt-1">{data.todayGrades} graded</div>
-              </div>
-              <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
-                <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">WTD</div>
-                <div className={'text-4xl font-bold ' + (data.wtdRate >= 80 ? 'text-green-400' : data.wtdRate >= 70 ? 'text-yellow-400' : 'text-red-400')}>{data.wtdRate}%</div>
-                <div className="text-gray-500 text-xs mt-1">This week</div>
-              </div>
-            </div>
-          </>
-        ) : (
+        {grading ? (
           <div className="text-center">
-            <div className="w-56 h-56 rounded-full border-8 border-gray-700 flex flex-col items-center justify-center mx-auto mb-8">
-              <div className="text-6xl mb-2">🍕</div>
-              <div className="text-gray-500 text-sm">Waiting for first grade</div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
-              <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
-                <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">Today</div>
-                <div className="text-4xl font-bold text-gray-600">—</div>
-                <div className="text-gray-500 text-xs mt-1">No grades yet</div>
-              </div>
-              <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
-                <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">WTD</div>
-                <div className="text-4xl font-bold text-gray-600">—</div>
-                <div className="text-gray-500 text-xs mt-1">This week</div>
-              </div>
-            </div>
+            <Loader size={64} className="text-[#CC0000] animate-spin mx-auto mb-4" />
+            <div className="text-white font-bold text-xl">Grading...</div>
+            <div className="text-gray-400 text-sm mt-1">AI is analyzing the pizza</div>
+          </div>
+        ) : display ? (
+          <div className={'w-56 h-56 rounded-full flex flex-col items-center justify-center border-8 ' + (display.passed ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10')}>
+            <div className={'text-7xl font-bold ' + (display.passed ? 'text-green-400' : 'text-red-400')}>{display.score}</div>
+            <div className={'text-xl font-bold mt-1 ' + (display.passed ? 'text-green-400' : 'text-red-400')}>{display.passed ? '✓ PASS' : '✗ FAIL'}</div>
+            <div className="text-gray-500 text-xs mt-1">Last Pizza</div>
+          </div>
+        ) : (
+          <div className="w-56 h-56 rounded-full border-8 border-gray-700 flex flex-col items-center justify-center">
+            <div className="text-6xl mb-2">🍕</div>
+            <div className="text-gray-500 text-sm">Waiting for first grade</div>
           </div>
         )}
+
+        <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+          <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
+            <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">Today</div>
+            <div className={'text-4xl font-bold ' + ((data?.todayRate || 0) >= 80 ? 'text-green-400' : (data?.todayRate || 0) >= 70 ? 'text-yellow-400' : 'text-red-400')}>
+              {data?.todayGrades ? data.todayRate + '%' : '—'}
+            </div>
+            <div className="text-gray-500 text-xs mt-1">{data?.todayGrades || 0} graded</div>
+          </div>
+          <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
+            <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">WTD</div>
+            <div className={'text-4xl font-bold ' + ((data?.wtdRate || 0) >= 80 ? 'text-green-400' : (data?.wtdRate || 0) >= 70 ? 'text-yellow-400' : 'text-red-400')}>
+              {data?.wtdRate ? data.wtdRate + '%' : '—'}
+            </div>
+            <div className="text-gray-500 text-xs mt-1">This week</div>
+          </div>
+        </div>
+
+        <label className={'w-full max-w-sm flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-lg cursor-pointer transition ' + (grading ? 'bg-gray-800 text-gray-600' : 'bg-[#CC0000] hover:bg-[#aa0000] text-white')}>
+          <Camera size={24} />
+          {grading ? 'Grading...' : '📷 Fixed Camera Test'}
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapture} disabled={grading} />
+        </label>
       </div>
     </div>
   )
 }
+```

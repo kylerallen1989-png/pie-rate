@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Camera, CheckCircle, AlertTriangle } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { Camera, CheckCircle, AlertTriangle, Loader } from 'lucide-react'
+import { gradeWithAI } from '../lib/gradeWithAI'
+import type { AIGradeResult } from '../lib/gradeWithAI'
 
 const STORES = ['957','1183','1963','3175','3309','3407','3999','4037','4106','4109','4870','4929','5070','5143']
-const STYLES = ['Original Crust','Thin Crust','Pan Pizza','Stuffed Crust','Gluten Free','NY Style']
+const STYLES = ['Cheese Only','Pepperoni & Cheese','Sausage & Cheese']
 
 const MANUAL_CHECKS = [
   'Toppings within spec',
@@ -27,8 +28,9 @@ export default function Grade() {
   const [checks, setChecks] = useState<Record<string,boolean>>({})
   const [notes, setNotes] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [grading, setGrading] = useState(false)
+  const [results, setResults] = useState<AIGradeResult[]>([])
+  const [error, setError] = useState('')
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -46,72 +48,95 @@ export default function Grade() {
   const allChecksPassed = MANUAL_CHECKS.every(c => checks[c] === true)
 
   const handleSubmit = async () => {
-    setSaving(true)
-    const crust = 2
-    const cheeseCov = 2
-    const cheeseLock = 1
-    const toppings = 3.5
-    const total = crust + cheeseCov + cheeseLock + toppings
-    const passed = total >= 8 && allChecksPassed
-
-    const { error } = await supabase.from('grades').insert({
-      store_id: store,
-      score: total,
-      passed,
-      mode: 'audit',
-      image_url: null,
-      graded_at: new Date().toISOString(),
-    })
-
-    if (error) console.error('Save error:', error.message)
-
-    setResult({ crust, cheeseCov, cheeseLock, toppings, total, passed, allChecksPassed })
-    setSaving(false)
-    setSubmitted(true)
+    if (!photo) { setError('Photo required for AI grading'); return }
+    setGrading(true)
+    setError('')
+    try {
+      const aiResults = await gradeWithAI(photo, store, 'audit')
+      if (aiResults.length === 0) {
+        setError('No gradeable pizzas detected. Make sure the photo shows a cut pizza ready for boxing.')
+        setGrading(false)
+        return
+      }
+      setResults(aiResults)
+      setSubmitted(true)
+    } catch (e: any) {
+      setError('Grading failed: ' + e.message)
+    }
+    setGrading(false)
   }
 
   const reset = () => {
     setStep(1); setStore(''); setEmployee(''); setStyle('')
-    setPhoto(null); setChecks({}); setNotes(''); setSubmitted(false); setResult(null)
+    setPhoto(null); setChecks({}); setNotes(''); setSubmitted(false)
+    setResults([]); setError('')
   }
 
-  if (submitted && result) {
+  if (grading) {
     return (
       <div className="p-4 max-w-lg mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-          <div className={"w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 " + (result.passed ? "bg-green-100" : "bg-red-100")}>
-            {result.passed ? <CheckCircle size={32} className="text-green-500" /> : <AlertTriangle size={32} className="text-red-500" />}
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">{result.passed ? "PASS" : "FAIL"}</h2>
-          <p className="text-gray-500 text-sm mb-2">#{store} · {employee} · {style}</p>
-          <div className={"text-5xl font-bold mb-6 " + (result.passed ? "text-green-600" : "text-red-600")}>
-            {result.total}/10
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {[
-              { label: 'Crust', score: result.crust, max: 2 },
-              { label: 'Cheese Coverage', score: result.cheeseCov, max: 2 },
-              { label: 'Cheese Lock', score: result.cheeseLock, max: 2 },
-              { label: 'Toppings', score: result.toppings, max: 4 },
-            ].map(cat => (
-              <div key={cat.label} className={"rounded-xl p-3 " + (cat.score === cat.max ? "bg-green-50" : cat.score === 0 ? "bg-red-50" : "bg-yellow-50")}>
-                <div className={"text-xl font-bold " + (cat.score === cat.max ? "text-green-600" : cat.score === 0 ? "text-red-600" : "text-yellow-600")}>
-                  {cat.score}/{cat.max}
-                </div>
-                <div className="text-xs text-gray-500">{cat.label}</div>
-              </div>
-            ))}
-          </div>
-          {!result.allChecksPassed && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-left">
-              <div className="text-red-700 text-sm font-semibold">Manual checks failed</div>
-              <div className="text-red-600 text-xs mt-1">One or more required checks were not met. Pizza automatically fails.</div>
-            </div>
-          )}
-          <button onClick={reset} className="w-full bg-[#CC0000] hover:bg-[#aa0000] text-white font-semibold py-3 rounded-xl transition">
-            Grade Another Pizza
-          </button>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+          <Loader size={48} className="text-[#CC0000] animate-spin mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-gray-900 mb-1">Grading Pizza...</h2>
+          <p className="text-gray-400 text-sm">AI is analyzing your photo</p>
         </div>
+      </div>
+    )
+  }
+
+  if (submitted && results.length > 0) {
+    return (
+      <div className="p-4 max-w-lg mx-auto space-y-4">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-gray-900">{results.length > 1 ? results.length + ' Pizzas Graded' : 'Pizza Graded'}</h2>
+          <p className="text-gray-500 text-sm mt-0.5">#{store} · {employee}</p>
+        </div>
+        {results.map((result, i) => (
+          <div key={i} className={"bg-white rounded-2xl shadow-sm border-2 p-6 " + (result.passed ? "border-green-200" : "border-red-200")}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className={"text-2xl font-bold " + (result.passed ? "text-green-600" : "text-red-600")}>
+                  {result.passed ? "✓ PASS" : "✗ FAIL"}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">{result.pizzaType}</div>
+              </div>
+              <div className={"text-5xl font-bold " + (result.passed ? "text-green-600" : "text-red-600")}>
+                {result.score}/10
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[
+                { label: 'Crust', score: result.crust, max: 2 },
+                { label: 'Cheese Cov.', score: result.cheeseCoverage, max: 2 },
+                { label: 'Cheese Lock', score: result.cheeseLock, max: 2 },
+                { label: 'Toppings', score: result.toppings, max: 4 },
+              ].map(cat => (
+                <div key={cat.label} className={"rounded-lg p-2 text-center " +
+                  (cat.score === cat.max ? "bg-green-50" : cat.score === 0 ? "bg-red-50" : "bg-yellow-50")}>
+                  <div className={"text-sm font-bold " +
+                    (cat.score === cat.max ? "text-green-600" : cat.score === 0 ? "text-red-600" : "text-yellow-600")}>
+                    {cat.score}/{cat.max}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">{cat.label}</div>
+                </div>
+              ))}
+            </div>
+            {result.notes && (
+              <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">{result.notes}</div>
+            )}
+          </div>
+        ))}
+        {!allChecksPassed && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-red-700 font-semibold text-sm mb-1">
+              <AlertTriangle size={14} /> Manual checks failed
+            </div>
+            <div className="text-red-600 text-xs">One or more required checks were not met.</div>
+          </div>
+        )}
+        <button onClick={reset} className="w-full bg-[#CC0000] hover:bg-[#aa0000] text-white font-semibold py-3 rounded-xl transition">
+          Grade Another Pizza
+        </button>
       </div>
     )
   }
@@ -145,8 +170,8 @@ export default function Grade() {
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#CC0000]" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Pizza Style</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Pizza Type</label>
+                <div className="grid grid-cols-1 gap-2">
                   {STYLES.map(s => (
                     <button key={s} onClick={() => setStyle(s)}
                       className={"py-2.5 px-3 rounded-xl text-sm font-medium border-2 transition " +
@@ -180,8 +205,8 @@ export default function Grade() {
               )}
               <div className="flex gap-3">
                 <button onClick={() => setStep(1)} className="flex-1 border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl">Back</button>
-                <button onClick={() => setStep(3)} className="flex-1 bg-[#CC0000] text-white font-semibold py-3 rounded-xl">
-                  {photo ? "Next" : "Skip Photo"}
+                <button disabled={!photo} onClick={() => setStep(3)} className="flex-1 bg-[#CC0000] text-white font-semibold py-3 rounded-xl disabled:opacity-40">
+                  Next
                 </button>
               </div>
             </div>
@@ -218,7 +243,7 @@ export default function Grade() {
               <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Store</span><span className="font-semibold">#{store}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Employee</span><span className="font-semibold">{employee}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Style</span><span className="font-semibold">{style}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Pizza Type</span><span className="font-semibold">{style}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Graded by</span><span className="font-semibold">{user?.name || 'Manager'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Manual Checks</span>
                   <span className={"font-semibold " + (allChecksPassed ? "text-green-600" : "text-red-600")}>
@@ -232,10 +257,11 @@ export default function Grade() {
                   placeholder="Any additional observations..."
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#CC0000] resize-none" />
               </div>
+              {error && <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>}
               <div className="flex gap-3">
                 <button onClick={() => setStep(3)} className="flex-1 border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl">Back</button>
-                <button onClick={handleSubmit} disabled={saving} className="flex-1 bg-[#CC0000] text-white font-semibold py-3 rounded-xl disabled:opacity-50">
-                  {saving ? 'Saving...' : 'Submit'}
+                <button onClick={handleSubmit} className="flex-1 bg-[#CC0000] text-white font-semibold py-3 rounded-xl">
+                  Grade with AI
                 </button>
               </div>
             </div>
