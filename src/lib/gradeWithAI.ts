@@ -26,6 +26,7 @@ async function uploadPhoto(base64: string, storeId: string): Promise<string | nu
     const { error } = await supabase.storage.from('pizza-photos').upload(filename, bytes, { contentType: 'image/jpeg' })
     if (error) { console.error('Upload error:', error); return null }
     const { data } = supabase.storage.from('pizza-photos').getPublicUrl(filename)
+    console.log('Uploaded photo URL:', data.publicUrl)
     return data.publicUrl
   } catch (e) {
     console.error('Upload failed:', e)
@@ -35,6 +36,8 @@ async function uploadPhoto(base64: string, storeId: string): Promise<string | nu
 
 export async function gradeWithAI(base64Image: string, storeId: string, mode: 'audit' | 'cut_table'): Promise<AIGradeResult[]> {
   const imageUrl = await uploadPhoto(base64Image, storeId)
+  console.log('imageUrl before insert:', imageUrl)
+
   const prompt = `You are a strict Papa John's pizza quality grader.
 
 CRITICAL REQUIREMENTS - reject anything that does not meet ALL of these:
@@ -106,8 +109,18 @@ If no qualifying pizzas are visible return exactly: []`
   for (const pizza of pizzas) {
     const score = pizza.crust + pizza.cheeseCoverage + pizza.cheeseLock + pizza.toppings
     const passed = score >= 8
+    const insertData = {
+      store_id: storeId,
+      score,
+      passed,
+      mode,
+      image_url: imageUrl,
+      graded_at: new Date().toISOString()
+    }
+    console.log('Inserting grade:', insertData)
+    const { error } = await supabase.from('grades').insert(insertData)
+    if (error) console.error('Insert error:', error)
     const result: AIGradeResult = { score, passed, crust: pizza.crust, cheeseCoverage: pizza.cheeseCoverage, cheeseLock: pizza.cheeseLock, toppings: pizza.toppings, pizzaType: pizza.pizzaType, notes: pizza.notes, imageUrl }
-    await supabase.from('grades').insert({ store_id: storeId, score, passed, mode, image_url: imageUrl, graded_at: new Date().toISOString() })
     results.push(result)
   }
   return results
