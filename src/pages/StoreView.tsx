@@ -11,6 +11,7 @@ interface StoreStats {
   lastScore: number
   lastPassed: boolean
   todayGrades: number
+  lastImageUrl: string | null
 }
 
 export default function StoreView() {
@@ -20,7 +21,7 @@ export default function StoreView() {
   const [data, setData] = useState<StoreStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [grading, setGrading] = useState(false)
-  const [lastResult, setLastResult] = useState<{score: number, passed: boolean} | null>(null)
+  const [lastResult, setLastResult] = useState<{score: number, passed: boolean, imageUrl: string | null} | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const storeId = user?.storeId || ''
 
@@ -65,6 +66,7 @@ export default function StoreView() {
       wtdRate: grades.length ? Math.round((wtdPassed / grades.length) * 100) : 0,
       lastScore: last ? last.score : 0,
       lastPassed: last ? last.passed : false,
+      lastImageUrl: last ? last.image_url : null,
     })
     setLoading(false)
   }
@@ -79,7 +81,7 @@ export default function StoreView() {
       try {
         const results = await gradeWithAI(base64, storeId, 'cut_table')
         if (results.length > 0) {
-          setLastResult({ score: results[0].score, passed: results[0].passed })
+          setLastResult({ score: results[0].score, passed: results[0].passed, imageUrl: results[0].imageUrl })
           await fetchData()
         }
       } catch (e) {
@@ -93,7 +95,7 @@ export default function StoreView() {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
-  const display = lastResult || (data && data.todayGrades > 0 ? { score: data.lastScore, passed: data.lastPassed } : null)
+  const display = lastResult || (data && data.todayGrades > 0 ? { score: data.lastScore, passed: data.lastPassed, imageUrl: data.lastImageUrl } : null)
 
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -119,48 +121,64 @@ export default function StoreView() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
         {grading ? (
           <div className="text-center">
             <Loader size={64} className="text-[#CC0000] animate-spin mx-auto mb-4" />
             <div className="text-white font-bold text-xl">Grading...</div>
             <div className="text-gray-400 text-sm mt-1">AI is analyzing the pizza</div>
           </div>
-        ) : display ? (
-          <div className={'w-56 h-56 rounded-full flex flex-col items-center justify-center border-8 ' + (display.passed ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10')}>
-            <div className={'text-7xl font-bold ' + (display.passed ? 'text-green-400' : 'text-red-400')}>{display.score}</div>
-            <div className={'text-xl font-bold mt-1 ' + (display.passed ? 'text-green-400' : 'text-red-400')}>{display.passed ? '✓ PASS' : '✗ FAIL'}</div>
-            <div className="text-gray-500 text-xs mt-1">Last Pizza</div>
-          </div>
         ) : (
-          <div className="w-56 h-56 rounded-full border-8 border-gray-700 flex flex-col items-center justify-center">
-            <div className="text-6xl mb-2">🍕</div>
-            <div className="text-gray-500 text-sm">Waiting for first grade</div>
-          </div>
+          <>
+            {display?.imageUrl ? (
+              <div className="w-full max-w-sm rounded-2xl overflow-hidden border-2 border-gray-700">
+                <img src={display.imageUrl} alt="Last graded pizza" className="w-full object-cover" style={{maxHeight: '280px'}} />
+              </div>
+            ) : (
+              <div className="w-full max-w-sm h-48 rounded-2xl border-2 border-dashed border-gray-700 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">🍕</div>
+                  <div className="text-gray-500 text-sm">No photo yet</div>
+                </div>
+              </div>
+            )}
+
+            {display ? (
+              <div className={'w-44 h-44 rounded-full flex flex-col items-center justify-center border-8 ' + (display.passed ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10')}>
+                <div className={'text-6xl font-bold ' + (display.passed ? 'text-green-400' : 'text-red-400')}>{display.score}</div>
+                <div className={'text-lg font-bold mt-1 ' + (display.passed ? 'text-green-400' : 'text-red-400')}>{display.passed ? '✓ PASS' : '✗ FAIL'}</div>
+                <div className="text-gray-500 text-xs mt-1">Last Pizza</div>
+              </div>
+            ) : (
+              <div className="w-44 h-44 rounded-full border-8 border-gray-700 flex flex-col items-center justify-center">
+                <div className="text-gray-500 text-sm text-center px-4">Waiting for first grade</div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+              <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
+                <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">Today</div>
+                <div className={'text-4xl font-bold ' + ((data?.todayRate || 0) >= 80 ? 'text-green-400' : (data?.todayRate || 0) >= 70 ? 'text-yellow-400' : 'text-red-400')}>
+                  {data?.todayGrades ? data.todayRate + '%' : '—'}
+                </div>
+                <div className="text-gray-500 text-xs mt-1">{data?.todayGrades || 0} graded</div>
+              </div>
+              <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
+                <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">WTD</div>
+                <div className={'text-4xl font-bold ' + ((data?.wtdRate || 0) >= 80 ? 'text-green-400' : (data?.wtdRate || 0) >= 70 ? 'text-yellow-400' : 'text-red-400')}>
+                  {data?.wtdRate ? data.wtdRate + '%' : '—'}
+                </div>
+                <div className="text-gray-500 text-xs mt-1">This week</div>
+              </div>
+            </div>
+
+            <label className={'w-full max-w-sm flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-lg cursor-pointer transition ' + (grading ? 'bg-gray-800 text-gray-600' : 'bg-[#CC0000] hover:bg-[#aa0000] text-white')}>
+              <Camera size={24} />
+              📷 Fixed Camera Test
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapture} disabled={grading} />
+            </label>
+          </>
         )}
-
-        <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
-          <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
-            <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">Today</div>
-            <div className={'text-4xl font-bold ' + ((data?.todayRate || 0) >= 80 ? 'text-green-400' : (data?.todayRate || 0) >= 70 ? 'text-yellow-400' : 'text-red-400')}>
-              {data?.todayGrades ? data.todayRate + '%' : '—'}
-            </div>
-            <div className="text-gray-500 text-xs mt-1">{data?.todayGrades || 0} graded</div>
-          </div>
-          <div className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
-            <div className="text-gray-400 text-xs uppercase tracking-wide mb-1">WTD</div>
-            <div className={'text-4xl font-bold ' + ((data?.wtdRate || 0) >= 80 ? 'text-green-400' : (data?.wtdRate || 0) >= 70 ? 'text-yellow-400' : 'text-red-400')}>
-              {data?.wtdRate ? data.wtdRate + '%' : '—'}
-            </div>
-            <div className="text-gray-500 text-xs mt-1">This week</div>
-          </div>
-        </div>
-
-        <label className={'w-full max-w-sm flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-lg cursor-pointer transition ' + (grading ? 'bg-gray-800 text-gray-600' : 'bg-[#CC0000] hover:bg-[#aa0000] text-white')}>
-          <Camera size={24} />
-          {grading ? 'Grading...' : '📷 Fixed Camera Test'}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapture} disabled={grading} />
-        </label>
       </div>
     </div>
   )
