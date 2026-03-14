@@ -1,112 +1,127 @@
 const fs = require('fs')
-
 fs.mkdirSync('src/lib', { recursive: true })
+const content = `import OpenAI from 'openai'
+import { supabase } from './supabase'
 
-const lines = []
-lines.push("import OpenAI from 'openai'")
-lines.push("import { supabase } from './supabase'")
-lines.push("")
-lines.push("const openai = new OpenAI({")
-lines.push("  apiKey: import.meta.env.VITE_OPENAI_API_KEY,")
-lines.push("  dangerouslyAllowBrowser: true")
-lines.push("})")
-lines.push("")
-lines.push("export interface AIGradeResult {")
-lines.push("  score: number")
-lines.push("  passed: boolean")
-lines.push("  crust: number")
-lines.push("  cheeseCoverage: number")
-lines.push("  cheeseLock: number")
-lines.push("  toppings: number")
-lines.push("  pizzaType: string")
-lines.push("  notes: string")
-lines.push("  imageUrl: string | null")
-lines.push("}")
-lines.push("")
-lines.push("async function uploadPhoto(base64: string, storeId: string): Promise<string | null> {")
-lines.push("  try {")
-lines.push("    const base64Data = base64.split(',')[1]")
-lines.push("    const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))")
-lines.push("    const filename = storeId + '/' + Date.now() + '.jpg'")
-lines.push("    const { error } = await supabase.storage.from('pizza-photos').upload(filename, bytes, { contentType: 'image/jpeg' })")
-lines.push("    if (error) { console.error('Upload error:', error); return null }")
-lines.push("    const { data } = supabase.storage.from('pizza-photos').getPublicUrl(filename)")
-lines.push("    return data.publicUrl")
-lines.push("  } catch (e) {")
-lines.push("    console.error('Upload failed:', e)")
-lines.push("    return null")
-lines.push("  }")
-lines.push("}")
-lines.push("")
-lines.push("export async function gradeWithAI(base64Image: string, storeId: string, mode: 'audit' | 'cut_table'): Promise<AIGradeResult[]> {")
-lines.push("  const imageUrl = await uploadPhoto(base64Image, storeId)")
-lines.push("  const prompt = `You are an expert Papa John's pizza quality grader. Analyze this image and grade every pizza you can clearly see that has been cut and is ready for boxing.")
-lines.push("")
-lines.push("Only grade these pizza types: cheese only, pepperoni and cheese, sausage and cheese. Ignore all other items.")
-lines.push("")
-lines.push("For each pizza grade using this rubric:")
-lines.push("")
-lines.push("CRUST (0 or 2 points) - award 2 only if ALL pass:")
-lines.push("- Color between 7-11 on scale (not too pale, not too dark)")
-lines.push("- Dirty/burnt area under 25%")
-lines.push("- Pizza not misshaped")
-lines.push("- All slices fully cut through (if any slice not cut, entire category = 0)")
-lines.push("")
-lines.push("CHEESE COVERAGE (0 or 2 points) - award 2 only if ALL pass:")
-lines.push("- 75% or more overall coverage")
-lines.push("- No bubbles larger than 1 inch diameter")
-lines.push("")
-lines.push("CHEESE LOCK (0 or 2 points) - award 2 only if ALL pass:")
-lines.push("- 75% or more cheese lock coverage")
-lines.push("- No bubbles larger than 1 inch diameter")
-lines.push("")
-lines.push("TOPPINGS (0 to 4 points, 0.5 per slice, 8 slices):")
-lines.push("- Pepperoni 1-topping: 5 per slice")
-lines.push("- Sausage crumbled: 7 per slice")
-lines.push("- Cheese only: automatically 4/4")
-lines.push("- Partial slices combined, 90%+ rounds up")
-lines.push("")
-lines.push("Return ONLY a JSON array, no other text:")
-lines.push("[")
-lines.push("  {")
-lines.push('    "pizzaType": "cheese only" | "pepperoni and cheese" | "sausage and cheese",')
-lines.push('    "crust": 0 or 2,')
-lines.push('    "cheeseCoverage": 0 or 2,')
-lines.push('    "cheeseLock": 0 or 2,')
-lines.push('    "toppings": 0 to 4,')
-lines.push('    "notes": "brief explanation of any deductions"')
-lines.push("  }")
-lines.push("]")
-lines.push("")
-lines.push("If no gradeable pizzas are visible return an empty array: []`")
-lines.push("")
-lines.push("  const response = await openai.chat.completions.create({")
-lines.push("    model: 'gpt-4o',")
-lines.push("    max_tokens: 1000,")
-lines.push("    messages: [{")
-lines.push("      role: 'user',")
-lines.push("      content: [")
-lines.push("        { type: 'image_url', image_url: { url: base64Image, detail: 'high' } },")
-lines.push("        { type: 'text', text: prompt }")
-lines.push("      ]")
-lines.push("    }]")
-lines.push("  })")
-lines.push("")
-lines.push("  const text = response.choices[0].message.content || '[]'")
-lines.push("  const clean = text.replace(/```json|```/g, '').trim()")
-lines.push("  let pizzas: any[] = []")
-lines.push("  try { pizzas = JSON.parse(clean) } catch { console.error('Parse error:', clean) }")
-lines.push("")
-lines.push("  const results: AIGradeResult[] = []")
-lines.push("  for (const pizza of pizzas) {")
-lines.push("    const score = pizza.crust + pizza.cheeseCoverage + pizza.cheeseLock + pizza.toppings")
-lines.push("    const passed = score >= 8")
-lines.push("    const result: AIGradeResult = { score, passed, crust: pizza.crust, cheeseCoverage: pizza.cheeseCoverage, cheeseLock: pizza.cheeseLock, toppings: pizza.toppings, pizzaType: pizza.pizzaType, notes: pizza.notes, imageUrl }")
-lines.push("    await supabase.from('grades').insert({ store_id: storeId, score, passed, mode, image_url: imageUrl, graded_at: new Date().toISOString() })")
-lines.push("    results.push(result)")
-lines.push("  }")
-lines.push("  return results")
-lines.push("}")
+const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
+})
 
-fs.writeFileSync('src/lib/gradeWithAI.ts', lines.join('\n'), 'utf8')
+export interface AIGradeResult {
+  score: number
+  passed: boolean
+  crust: number
+  cheeseCoverage: number
+  cheeseLock: number
+  toppings: number
+  pizzaType: string
+  notes: string
+  imageUrl: string | null
+}
+
+async function uploadPhoto(base64: string, storeId: string): Promise<string | null> {
+  try {
+    const base64Data = base64.split(',')[1]
+    const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+    const filename = storeId + '/' + Date.now() + '.jpg'
+    const { error } = await supabase.storage.from('pizza-photos').upload(filename, bytes, { contentType: 'image/jpeg' })
+    if (error) { console.error('Upload error:', error); return null }
+    const { data } = supabase.storage.from('pizza-photos').getPublicUrl(filename)
+    return data.publicUrl
+  } catch (e) {
+    console.error('Upload failed:', e)
+    return null
+  }
+}
+
+export async function gradeWithAI(base64Image: string, storeId: string, mode: 'audit' | 'cut_table'): Promise<AIGradeResult[]> {
+  const imageUrl = await uploadPhoto(base64Image, storeId)
+
+  const prompt = \`You are a strict Papa John's pizza quality grader.
+
+CRITICAL REQUIREMENTS - reject any pizza that does not meet ALL of these:
+- The pizza must be WHOLE and COMPLETE - all 8 slices present
+- The photo must be taken from DIRECTLY ABOVE (top-down view)
+- The pizza must be freshly cut and ready for boxing
+- The entire pizza must be visible with no slices missing or eaten
+- Partial pizzas, eaten pizzas, side-angle photos = skip that pizza
+- Close-up photos showing only part of a pizza = skip that pizza
+
+Only grade these pizza types: cheese only, pepperoni and cheese, sausage and cheese.
+If the pizza type cannot be clearly identified = skip that pizza.
+
+If multiple pizzas are visible, grade EACH one separately as its own entry in the array.
+
+For each qualifying pizza grade using this rubric:
+
+CRUST (0 or 2 points) - award 2 only if ALL pass:
+- Color between 7-11 on scale (not too pale, not too dark)
+- Dirty/burnt area under 25%
+- Pizza not misshaped
+- All slices fully cut through (if any slice not cut, entire category = 0)
+
+CHEESE COVERAGE (0 or 2 points) - award 2 only if ALL pass:
+- 75% or more overall coverage
+- No bubbles larger than 1 inch diameter
+
+CHEESE LOCK (0 or 2 points) - award 2 only if ALL pass:
+- 75% or more cheese lock coverage
+- No bubbles larger than 1 inch diameter
+
+TOPPINGS (0 to 4 points):
+- Pepperoni 1-topping: need 5 per slice minimum
+- Sausage crumbled: need 7 per slice minimum
+- Cheese only: automatically 4/4
+- Be strict - if topping counts are borderline, deduct points
+
+Return ONLY a JSON array, no other text:
+[
+  {
+    "pizzaType": "cheese only" | "pepperoni and cheese" | "sausage and cheese",
+    "crust": 0 or 2,
+    "cheeseCoverage": 0 or 2,
+    "cheeseLock": 0 or 2,
+    "toppings": 0 to 4,
+    "notes": "brief explanation of any deductions"
+  }
+]
+
+If no qualifying pizzas are visible return exactly: []\`
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: 1000,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: base64Image, detail: 'high' } },
+        { type: 'text', text: prompt }
+      ]
+    }]
+  })
+
+  const text = response.choices[0].message.content || '[]'
+  const clean = text.replace(/\`\`\`json|\`\`\`/g, '').trim()
+  let pizzas: any[] = []
+  try { pizzas = JSON.parse(clean) } catch { console.error('Parse error:', clean) }
+
+  const results: AIGradeResult[] = []
+  for (const pizza of pizzas) {
+    const score = pizza.crust + pizza.cheeseCoverage + pizza.cheeseLock + pizza.toppings
+    const passed = score >= 8
+    const { error } = await supabase.from('grades').insert({
+      store_id: storeId,
+      score,
+      passed,
+      mode,
+      image_url: imageUrl,
+      graded_at: new Date().toISOString()
+    })
+    if (error) console.error('Insert error:', error)
+    results.push({ score, passed, crust: pizza.crust, cheeseCoverage: pizza.cheeseCoverage, cheeseLock: pizza.cheeseLock, toppings: pizza.toppings, pizzaType: pizza.pizzaType, notes: pizza.notes, imageUrl })
+  }
+  return results
+}`
+fs.writeFileSync('src/lib/gradeWithAI.ts', content, 'utf8')
 console.log('wrote src/lib/gradeWithAI.ts')

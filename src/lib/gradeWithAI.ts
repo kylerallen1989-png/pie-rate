@@ -6,6 +6,13 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 })
 
+export interface BoundingBox {
+  x: number      // left edge, 0–1
+  y: number      // top edge, 0–1
+  width: number  // 0–1
+  height: number // 0–1
+}
+
 export interface AIGradeResult {
   score: number
   passed: boolean
@@ -16,14 +23,45 @@ export interface AIGradeResult {
   pizzaType: string
   notes: string
   imageUrl: string | null
+  boundingBox: BoundingBox
+}
+
+async function cropToBase64(base64Image: string, box: BoundingBox): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const sw = Math.round(box.width * img.naturalWidth)
+      const sh = Math.round(box.height * img.naturalHeight)
+      canvas.width = sw
+      canvas.height = sh
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(
+        img,
+        Math.round(box.x * img.naturalWidth),
+        Math.round(box.y * img.naturalHeight),
+        sw,
+        sh,
+        0,
+        0,
+        sw,
+        sh
+      )
+      resolve(canvas.toDataURL('image/jpeg', 0.92))
+    }
+    img.onerror = reject
+    img.src = base64Image
+  })
 }
 
 async function uploadPhoto(base64: string, storeId: string): Promise<string | null> {
   try {
     const base64Data = base64.split(',')[1]
     const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
-    const filename = storeId + '/' + Date.now() + '.jpg'
-    const { error } = await supabase.storage.from('pizza-photos').upload(filename, bytes, { contentType: 'image/jpeg' })
+    const filename = storeId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.jpg'
+    const { error } = await supabase.storage
+      .from('pizza-photos')
+      .upload(filename, bytes, { contentType: 'image/jpeg' })
     if (error) { console.error('Upload error:', error); return null }
     const { data } = supabase.storage.from('pizza-photos').getPublicUrl(filename)
     return data.publicUrl
@@ -33,10 +71,7 @@ async function uploadPhoto(base64: string, storeId: string): Promise<string | nu
   }
 }
 
-export async function gradeWithAI(base64Image: string, storeId: string, mode: 'audit' | 'cut_table'): Promise<AIGradeResult[]> {
-  const imageUrl = await uploadPhoto(base64Image, storeId)
-
-  const prompt = `You are a strict Papa John's pizza quality grader.
+const PROMPT = `You are a strict Papa John's pizza quality grader.
 
 CRITICAL REQUIREMENTS - reject any pizza that does not meet ALL of these:
 - The pizza must be WHOLE and COMPLETE - all 8 slices present
@@ -49,9 +84,16 @@ CRITICAL REQUIREMENTS - reject any pizza that does not meet ALL of these:
 Only grade these pizza types: cheese only, pepperoni and cheese, sausage and cheese.
 If the pizza type cannot be clearly identified = skip that pizza.
 
-If multiple pizzas are visible, grade EACH one separately as its own entry in the array.
+If multiple pizzas are visible, grade EACH one separately as its own entry.
 
-For each qualifying pizza grade using this rubric:
+For each qualifying pizza, provide a bounding box as fractions of the image dimensions (0.0–1.0):
+- x: left edge fraction
+- y: top edge fraction
+- width: width fraction
+- height: height fraction
+Make the bounding box tight around the pizza including the crust edge.
+
+Grade each qualifying pizza using this rubric:
 
 CRUST (0 or 2 points) - award 2 only if ALL pass:
 - Color between 7-11 on scale (not too pale, not too dark)
@@ -77,6 +119,7 @@ Return ONLY a JSON array, no other text:
 [
   {
     "pizzaType": "cheese only" | "pepperoni and cheese" | "sausage and cheese",
+    "boundingBox": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
     "crust": 0 or 2,
     "cheeseCoverage": 0 or 2,
     "cheeseLock": 0 or 2,
@@ -87,14 +130,19 @@ Return ONLY a JSON array, no other text:
 
 If no qualifying pizzas are visible return exactly: []`
 
+export async function gradeWithAI(
+  base64Image: string,
+  storeId: string,
+  mode: 'audit' | 'cut_table'
+): Promise<AIGradeResult[]> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
-    max_tokens: 1000,
+    max_tokens: 1500,
     messages: [{
       role: 'user',
       content: [
         { type: 'image_url', image_url: { url: base64Image, detail: 'high' } },
-        { type: 'text', text: prompt }
+        { type: 'text', text: PROMPT }
       ]
     }]
   })
@@ -105,9 +153,26 @@ If no qualifying pizzas are visible return exactly: []`
   try { pizzas = JSON.parse(clean) } catch { console.error('Parse error:', clean) }
 
   const results: AIGradeResult[] = []
+
   for (const pizza of pizzas) {
-    const score = pizza.crust + pizza.cheeseCoverage + pizza.cheeseLock + pizza.toppings
+    const box: BoundingBox = {
+      x: pizza.boundingBox?.x ?? 0,
+      y: pizza.boundingBox?.y ?? 0,
+      width: pizza.boundingBox?.width ?? 1,
+      height: pizza.boundingBox?.height ?? 1
+    }
+
+    let imageUrl: string | null = null
+    try {
+      const cropped = await cropToBase64(base64Image, box)
+      imageUrl = await uploadPhoto(cropped, storeId)
+    } catch (e) {
+      console.error('Crop/upload failed:', e)
+    }
+
+    const score = (pizza.crust ?? 0) + (pizza.cheeseCoverage ?? 0) + (pizza.cheeseLock ?? 0) + (pizza.toppings ?? 0)
     const passed = score >= 8
+
     const { error } = await supabase.from('grades').insert({
       store_id: storeId,
       score,
@@ -117,7 +182,20 @@ If no qualifying pizzas are visible return exactly: []`
       graded_at: new Date().toISOString()
     })
     if (error) console.error('Insert error:', error)
-    results.push({ score, passed, crust: pizza.crust, cheeseCoverage: pizza.cheeseCoverage, cheeseLock: pizza.cheeseLock, toppings: pizza.toppings, pizzaType: pizza.pizzaType, notes: pizza.notes, imageUrl })
+
+    results.push({
+      score,
+      passed,
+      crust: pizza.crust ?? 0,
+      cheeseCoverage: pizza.cheeseCoverage ?? 0,
+      cheeseLock: pizza.cheeseLock ?? 0,
+      toppings: pizza.toppings ?? 0,
+      pizzaType: pizza.pizzaType ?? 'unknown',
+      notes: pizza.notes ?? '',
+      imageUrl,
+      boundingBox: box
+    })
   }
+
   return results
 }
