@@ -470,7 +470,7 @@ export default function Reports() {
                           domain={cfg.metric === 'pass_rate' ? [0, 100] : cfg.metric === 'avg_score' ? [0, 10] : undefined}
                         />
                         <Tooltip
-                          formatter={(v: number | string | undefined) => [String(v ?? 0) + (cfg.metric === 'pass_rate' ? '%' : ''), metricLabel(cfg.metric)]}
+                          formatter={(v: any) => [String(v) + '%', 'Pass Rate']}
                           contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                           cursor={{ fill: '#fef2f2' }}
                         />
