@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LayoutDashboard, ClipboardList, Camera, MapPin, FileText, LogOut } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Camera, MapPin, FileText, LogOut, ShieldCheck } from 'lucide-react'
 
 export default function Layout() {
   const { user, logout } = useAuth()
@@ -17,6 +17,8 @@ export default function Layout() {
     { to: '/grade', icon: Camera, label: 'Grade' },
     { to: '/locations', icon: MapPin, label: 'Locations' },
     { to: '/reports', icon: FileText, label: 'Reports' },
+    ...(user?.role === 'admin'           ? [{ to: '/admin',           icon: ShieldCheck, label: 'Admin' }] : []),
+    ...(user?.role === 'franchise_owner' ? [{ to: '/franchise-admin', icon: ShieldCheck, label: 'Admin' }] : []),
   ]
 
   return (

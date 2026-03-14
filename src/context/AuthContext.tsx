@@ -6,8 +6,9 @@ interface User {
   id: string
   name: string
   email: string
-  role: 'worker' | 'manager' | 'admin' | 'store'
+  role: 'super_admin' | 'franchise_owner' | 'director' | 'area_supervisor' | 'gm' | 'worker' | 'manager' | 'admin' | 'store'
   storeId?: string
+  companyId?: string
 }
 
 interface AuthContextType {
@@ -30,7 +31,7 @@ const STORE_PASSWORDS: Record<string, string> = {
 async function fetchProfile(userId: string): Promise<User | null> {
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
   if (error || !data) { console.error('Profile fetch error:', error); return null }
-  return { id: data.id, name: data.name, email: data.email, role: data.role, storeId: data.store_id }
+  return { id: data.id, name: data.name, email: data.email, role: data.role, storeId: data.store_id, companyId: data.company_id }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -58,6 +59,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (emailOrStore: string, password: string): Promise<boolean> => {
     if (STORE_PASSWORDS[emailOrStore] === password) {
       const u: User = { id: emailOrStore, name: 'Store #' + emailOrStore, email: emailOrStore, role: 'store', storeId: emailOrStore }
+      setUser(u)
+      sessionStorage.setItem('pie_rate_store', JSON.stringify(u))
+      return true
+    }
+    // Check stores table for dynamically added stores
+    const { data: storeRow } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('id', emailOrStore)
+      .eq('password', password)
+      .eq('active', true)
+      .maybeSingle()
+    if (storeRow) {
+      const u: User = { id: storeRow.id, name: 'Store #' + storeRow.id, email: emailOrStore, role: 'store', storeId: storeRow.id }
       setUser(u)
       sessionStorage.setItem('pie_rate_store', JSON.stringify(u))
       return true
